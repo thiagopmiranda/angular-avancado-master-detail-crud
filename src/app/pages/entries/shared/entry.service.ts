@@ -4,6 +4,8 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
 import { map, catchError, flatMap } from 'rxjs/operators';
 
+import { CategoryService } from '../../categories/shared/category.service';
+
 import { Entry } from './entry.model';
 
 @Injectable({
@@ -12,7 +14,10 @@ import { Entry } from './entry.model';
 export class EntryService {
   private apiPath: string = 'api/entries';
 
-  constructor(private http: HttpClient) {}
+  constructor(
+    private http: HttpClient,
+    private categoryService: CategoryService
+  ) {}
 
   getAll(): Observable<Entry[]> {
     return this.http
@@ -29,17 +34,32 @@ export class EntryService {
   }
 
   create(entry: Entry): Observable<Entry> {
-    return this.http
-      .post(this.apiPath, entry)
-      .pipe(catchError(this.handleError), map(this.jsonDataToEntry));
+    // entry.categoryId // 1 => moradia
+    // entry.category = category // null
+
+    return this.categoryService.getById(entry.categoryId).pipe(
+      flatMap((category) => {
+        entry.category = category;
+
+        return this.http
+          .post(this.apiPath, entry)
+          .pipe(catchError(this.handleError), map(this.jsonDataToEntry));
+      })
+    );
   }
 
   update(entry: Entry): Observable<Entry> {
     const url = '${this.apiPath}/${entry.id}';
 
-    return this.http.put(url, entry).pipe(
-      catchError(this.handleError),
-      map(() => entry)
+    return this.categoryService.getById(entry.CategoryId).pipe(
+      flatMap((category) => {
+        entry.category = category;
+
+        return this.http.put(url, entry).pipe(
+          catchError(this.handleError),
+          map(() => entry)
+        );
+      })
     );
   }
 
@@ -73,3 +93,33 @@ export class EntryService {
     return throwError(error);
   }
 }
+
+/*
+Relacionamento API externa - ruby on rails
+
+class Entry
+  belongs_to:category
+
+  category_id
+
+class Category
+  has_many: entries
+
+  entryService.getById(2)
+
+  {
+    id: 2,
+    name: "Aluguel",
+    date: '08/11/2018',
+    paid: false,
+
+    categoryId: 1 => Moradia,
+    category: {
+      id: 1,
+      name: "Moradia",
+      description: "qualquer descricao da categoria"
+    }
+  }
+
+  Object.assign(new Entry(), jsonData);
+*/
